@@ -31,15 +31,19 @@
 </template>
 
 <script>
-export default {
+import { defineComponent } from 'vue';
+
+export default defineComponent({
   name: 'HelloWorld',
   props: {
     msg: String
+  },
+  mounted() {
+    console.log('HelloWorld component has been mounted');
   }
-}
+});
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
 h3 {
   margin: 40px 0 0;
