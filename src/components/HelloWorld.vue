@@ -39,7 +39,7 @@ export default defineComponent({
     msg: String
   },
   mounted() {
-    console.log('HelloWorld component has been mounted');
+    console.log('HelloWorld component has been mounted 2');
   }
 });
 </script>
