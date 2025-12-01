@@ -1,0 +1,215 @@
+@startuml Threshold_ECDSA_Protocol
+
+title 协议完整流程时序图 (n=3)
+
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+skinparam BoxPadding 10
+skinparam ParticipantPadding 20
+
+actor "外部系统" as External
+participant "P₁" as P1 #LightBlue
+participant "P₂" as P2 #LightGreen
+participant "P₃" as P3 #LightYellow
+database "公共存储" as Storage #LightGray
+
+== 阶段 1：密钥生成 (3轮) ==
+
+note over P1,P3 #PaleGreen
+  **运行时机**: 系统初始化，仅执行一次
+  **核心技术**:
+  • 承诺-解承诺 (Commit-Decommit)
+  • Schnorr 零知识证明 (Πsch)
+  • Fiat-Shamir 变换
+  **目的**: 生成公钥 X 和私钥份额 xᵢ
+end note
+
+group 第1轮：生成并承诺 【技术: Hash承诺】
+    P1 -> P1: 生成 x₁, X₁=g^x₁\n计算 V₁=H(X₁,A₁)
+    P2 -> P2: 生成 x₂, X₂=g^x₂\n计算 V₂=H(X₂,A₂)
+    P3 -> P3: 生成 x₃, X₃=g^x₃\n计算 V₃=H(X₃,A₃)
+    
+    P1 ->> P2: 广播 V₁
+    P1 ->> P3: 广播 V₁
+    P2 ->> P1: 广播 V₂
+    P2 ->> P3: 广播 V₂
+    P3 ->> P1: 广播 V₃
+    P3 ->> P2: 广播 V₃
+end
+
+group 第2轮：解承诺 【技术: 承诺绑定性验证】
+    P1 ->> P2: (X₁, A₁)
+    P1 ->> P3: (X₁, A₁)
+    P2 ->> P1: (X₂, A₂)
+    P2 ->> P3: (X₂, A₂)
+    P3 ->> P1: (X₃, A₃)
+    P3 ->> P2: (X₃, A₃)
+
+    P1 -> P1: 验证 H(Xⱼ,Aⱼ)=Vⱼ ✓
+    P2 -> P2: 验证 H(Xⱼ,Aⱼ)=Vⱼ ✓
+    P3 -> P3: 验证 H(Xⱼ,Aⱼ)=Vⱼ ✓
+end
+
+group 第3轮：Schnorr证明 【技术: Σ-协议 + Fiat-Shamir】
+    note over P1,P3: e = H(A₁,A₂,A₃)
+    
+    P1 ->> P2: z₁ = a₁ + e·x₁
+    P1 ->> P3: z₁
+    P2 ->> P1: z₂ = a₂ + e·x₂
+    P2 ->> P3: z₂
+    P3 ->> P1: z₃ = a₃ + e·x₃
+    P3 ->> P2: z₃
+    
+    P1 -> P1: 验证 g^zⱼ = Aⱼ·Xⱼ^e ✓
+    P2 -> P2: 验证 g^zⱼ = Aⱼ·Xⱼ^e ✓
+    P3 -> P3: 验证 g^zⱼ = Aⱼ·Xⱼ^e ✓
+end
+
+note over P1,P3 #LightBlue: 输出: X = g^(x₁+x₂+x₃), 各方持有 xᵢ
+
+Storage <-- P1: 存储公钥 X
+Storage <-- P2: 存储公钥 X
+Storage <-- P3: 存储公钥 X
+
+== 阶段 2：辅助信息 + 密钥刷新 (2轮) ==
+
+note over P1,P3 #PaleGreen
+  **运行时机**: 定期执行（如每周/每月）
+  **核心技术**:
+  • Paillier 加密系统
+  • Ring-Pedersen 承诺
+  • 0 的秘密共享 (0-sharing)
+  • ZK证明: Πmod, Πprm, Πfac, Πsch
+  **目的**: 生成加密参数 + 刷新私钥份额
+end note
+
+group 第1轮：生成辅助信息 【技术: Paillier + Ring-Pedersen + 0-sharing】
+    P1 -> P1: 生成 Paillier 密钥 (N₁;p₁,q₁)\n生成 RP 参数 (N₁,s₁,t₁)\n采样 0-sharing: Σaᵢⱼ=0
+    P2 -> P2: 生成 (N₂;p₂,q₂), (N₂,s₂,t₂)\n采样 0-sharing
+    P3 -> P3: 生成 (N₃;p₃,q₃), (N₃,s₃,t₃)\n采样 0-sharing
+    
+    P1 ->> P2: (N₁,s₁,t₁,{Aᵢⱼ})\n+ Πmod, Πprm, Πfac
+    P1 ->> P3: 同上
+    P2 ->> P1: (N₂,s₂,t₂,{Aᵢⱼ})\n+ Πmod, Πprm, Πfac
+    P2 ->> P3: 同上
+    P3 ->> P1: (N₃,s₃,t₃,{Aᵢⱼ})\n+ Πmod, Πprm, Πfac
+    P3 ->> P2: 同上
+end
+
+group 第2轮：验证并刷新 【技术: Πmod + Πprm + Πfac + Πsch】
+    P1 -> P1: 验证ZK证明\nx₁' = x₁ + Σⱼa_{j1}
+    P2 -> P2: 验证ZK证明\nx₂' = x₂ + Σⱼa_{j2}
+    P3 -> P3: 验证ZK证明\nx₃' = x₃ + Σⱼa_{j3}
+
+    P1 ->> P2: Πsch(X₁',x₁')
+    P1 ->> P3: Πsch
+    P2 ->> P1: Πsch(X₂',x₂')
+    P2 ->> P3: Πsch
+    P3 ->> P1: Πsch(X₃',x₃')
+    P3 ->> P2: Πsch
+end
+
+note over P1,P3 #LightBlue: 输出: Nⱼ, sⱼ, tⱼ (共享)\n刷新后份额 xᵢ' (私有)
+
+== 阶段 3：预签名 (4轮) ==
+
+note over P1,P3 #PaleGreen
+  **运行时机**: 每次签名前执行（或提前批量生成）
+  **核心技术**:
+  • Paillier 同态加密
+  • MtA (Multiplicative-to-Additive) 协议
+  • 掩码技术 (δ = kγ)
+  • ZK证明: Πenc, Πaff-g, Πaff-p, Πlog
+  **目的**: 计算 R=g^(k⁻¹) 和份额 (kᵢ, χᵢ)
+end note
+
+group 第1轮：加密随机数 【技术: Paillier加密 + Πenc范围证明】
+    P1 -> P1: 采样 k₁,γ₁\nK₁=enc₁(k₁), G₁=enc₁(γ₁)
+    P2 -> P2: 采样 k₂,γ₂\nK₂=enc₂(k₂), G₂=enc₂(γ₂)
+    P3 -> P3: 采样 k₃,γ₃\nK₃=enc₃(k₃), G₃=enc₃(γ₃)
+    
+    P1 ->> P2: (K₁,G₁) + Πenc
+    P1 ->> P3: (K₁,G₁) + Πenc
+    P2 ->> P1: (K₂,G₂) + Πenc
+    P2 ->> P3: (K₂,G₂) + Πenc
+    P3 ->> P1: (K₃,G₃) + Πenc
+    P3 ->> P2: (K₃,G₃) + Πenc
+end
+
+group 第2轮：MtA 协议 【技术: Paillier同态 + Πaff-g/Πaff-p仿射证明】
+    note over P1,P3: 计算 kγ 和 kx 的加法份额\n(6对 MtA × 2 = 12次)
+
+    P1 ->> P2: D₁₂ = Kⱼ ⊙ γ₁ ⊕ enc(-β)\n+ Πaff-g
+    P2 ->> P1: D₂₁ + Πaff-g
+    P1 ->> P3: D₁₃ + Πaff-g
+    P3 ->> P1: D₃₁ + Πaff-g
+    P2 ->> P3: D₂₃ + Πaff-g
+    P3 ->> P2: D₃₂ + Πaff-g
+
+    note over P1,P3: 类似计算 kx 份额\n使用 Πaff-p
+end
+
+group 第3轮：计算份额 【技术: 份额聚合 + Πlog一致性证明】
+    P1 -> P1: δ₁ = γ₁k₁ + Σ(αⱼ+βⱼ)\nχ₁ = x₁k₁ + Σ(α'ⱼ+β'ⱼ)\nΔ₁ = Γ^k₁
+    P2 -> P2: δ₂, χ₂, Δ₂
+    P3 -> P3: δ₃, χ₃, Δ₃
+    
+    P1 ->> P2: (δ₁, Δ₁, Γ₁) + Πlog
+    P1 ->> P3: 同上
+    P2 ->> P1: (δ₂, Δ₂, Γ₂) + Πlog
+    P2 ->> P3: 同上
+    P3 ->> P1: (δ₃, Δ₃, Γ₃) + Πlog
+    P3 ->> P2: 同上
+end
+
+group 第4轮：验证并计算R 【技术: 一致性验证 + 掩码求逆】
+    P1 -> P1: 验证 g^δ = ∏Δᵢ\nδ = Σδᵢ\nR = Γ^(δ⁻¹)
+    P2 -> P2: 同样验证和计算
+    P3 -> P3: 同样验证和计算
+end
+
+note over P1,P3 #LightBlue: 输出: R = g^(k⁻¹)\n各方持有 (kᵢ, χᵢ)
+
+== 阶段 4：签名 (1轮) ==
+
+External -> P1: 消息 m
+External -> P2: 消息 m
+External -> P3: 消息 m
+
+note over P1,P3 #PaleGreen
+  **运行时机**: 消息到达后立即执行
+  **核心技术**:
+  • 线性组合 (无需交互式ZK)
+  • ECDSA 签名验证
+  **目的**: 生成最终签名 (r, σ)
+end note
+
+group 计算签名份额 【技术: 线性份额聚合】
+    P1 -> P1: r = R|ₓ\nσ₁ = k₁·m + r·χ₁
+    P2 -> P2: σ₂ = k₂·m + r·χ₂
+    P3 -> P3: σ₃ = k₃·m + r·χ₃
+    
+    P1 ->> P2: σ₁
+    P1 ->> P3: σ₁
+    P2 ->> P1: σ₂
+    P2 ->> P3: σ₂
+    P3 ->> P1: σ₃
+    P3 ->> P2: σ₃
+end
+
+P1 -> P1: σ = σ₁+σ₂+σ₃\n验证 (r,σ) ✓
+P2 -> P2: σ = σ₁+σ₂+σ₃\n验证 (r,σ) ✓
+P3 -> P3: σ = σ₁+σ₂+σ₃\n验证 (r,σ) ✓
+
+note over P1,P3 #Salmon: 最终输出: 签名 (r, σ)
+
+P1 --> External: 返回签名 (r, σ)
+
+== 验证签名 【技术: 标准ECDSA验证】 ==
+
+External -> External: u₁ = m·σ⁻¹\nu₂ = r·σ⁻¹\nR' = g^u₁·X^u₂\n验证 R'|ₓ = r ✓
+
+note over External #LightGreen: 签名有效！
+
+@enduml
+

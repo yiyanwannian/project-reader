@@ -1,0 +1,98 @@
+@startuml Threshold_ECDSA_Overview
+
+title 协议阶段概览
+
+skinparam backgroundColor #FEFEFE
+skinparam BoxPadding 15
+
+participant "P₁" as P1 #LightBlue
+participant "P₂" as P2 #LightGreen  
+participant "P₃" as P3 #LightYellow
+
+== 阶段 1：密钥生成 ==
+note over P1,P3 #PaleGreen
+  **运行时机**: 系统初始化（一次）
+  **轮数**: 3轮
+  **技术**: 承诺-解承诺 + Schnorr证明
+end note
+
+P1 <-> P2: 第1轮: 交换承诺 Vᵢ
+P2 <-> P3
+P1 <-> P3
+|||
+P1 <-> P2: 第2轮: 交换 (Xᵢ, Aᵢ)
+P2 <-> P3
+P1 <-> P3
+|||
+P1 <-> P2: 第3轮: 交换 zᵢ
+P2 <-> P3
+P1 <-> P3
+
+note over P1,P3 #LightBlue
+  **输出**: 公钥 X = g^x, 私钥份额 xᵢ
+end note
+
+== 阶段 2：辅助信息 + 密钥刷新 ==
+note over P1,P3 #PaleGreen
+  **运行时机**: 定期（如每周）
+  **轮数**: 2轮
+  **技术**: Paillier + Ring-Pedersen + 0-sharing
+end note
+
+P1 <-> P2: 第1轮: (Nᵢ,sᵢ,tᵢ) + Πmod,Πprm,Πfac
+P2 <-> P3
+P1 <-> P3
+|||
+P1 <-> P2: 第2轮: Πsch (刷新份额证明)
+P2 <-> P3
+P1 <-> P3
+
+note over P1,P3 #LightBlue
+  **输出**: Paillier公钥, RP参数, 刷新后份额 xᵢ'
+end note
+
+== 阶段 3：预签名 ==
+note over P1,P3 #PaleGreen
+  **运行时机**: 每次签名前（或提前批量）
+  **轮数**: 4轮
+  **技术**: MtA + 掩码 δ=kγ
+end note
+
+P1 <-> P2: 第1轮: (Kᵢ,Gᵢ) + Πenc
+P2 <-> P3
+P1 <-> P3
+|||
+P1 <-> P2: 第2轮: MtA份额 + Πaff-g, Πaff-p
+P2 <-> P3
+P1 <-> P3
+|||
+P1 <-> P2: 第3轮: (δᵢ,Δᵢ,Γᵢ) + Πlog
+P2 <-> P3
+P1 <-> P3
+|||
+P1 -> P1: 第4轮: 验证 g^δ = ∏Δᵢ
+P2 -> P2: 计算 R = Γ^(δ⁻¹)
+P3 -> P3
+
+note over P1,P3 #LightBlue
+  **输出**: R = g^(k⁻¹), 份额 (kᵢ, χᵢ)
+end note
+
+== 阶段 4：签名 ==
+note over P1,P3 #PaleGreen
+  **运行时机**: 消息到达后
+  **轮数**: 1轮
+  **技术**: 线性组合
+end note
+
+P1 <-> P2: σᵢ = kᵢ·m + r·χᵢ
+P2 <-> P3
+P1 <-> P3
+
+note over P1,P3 #Salmon
+  **最终输出**: 签名 (r, σ)
+  σ = Σσᵢ = k(m + rx)
+end note
+
+@enduml
+
